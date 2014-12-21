@@ -1,0 +1,601 @@
+%This file is to be used by MATLAB
+function dudamannixbatesGUI
+ 
+%Figure is created.
+f = figure('Visible','off','Color',[.5 .5 .5],'Units','normalized',...
+    'Position',[0,0,1,1],'MenuBar','None','SelectionType','open');
+%Boxes created for entering a ticker.
+tsym=uicontrol('Style','text','Units','normalized','BackgroundColor',...
+    [.5 .5 .5],'Position',[.88 .88 .1 .1],'String',...
+    'Enter Ticker Symbol','FontSize',10);
+symbox=uicontrol('Style','edit','Units','normalized','BackgroundColor',...
+    [.8 .8 .8],'Position',[.88 .92 .1 .03],'Callback',@callbackfn1);
+%Boxes for recent searches
+tser=uicontrol('Style','text','Units','normalized','BackgroundColor',...
+    [.5 .5 .5],'Position',[.88 .8 .1 .1],'String',...
+    'Recent Searches','FontSize',10);
+searches = {'GOOG'};
+rser=uicontrol('Style','listbox','Units','normalized','BackgroundColor',...
+    [.8 .8 .8],'Position',[.88 .47 .1 .4],'FontSize',16,...
+    'Callback',@callbackfn2,'String',searches);
+%Central graph is made
+axs=axes('Position',[.05 .54 .78 .38],'NextPlot','add','units','normalized');
+%Box for company information
+csym=uicontrol('Style','text','Units','normalized','BackgroundColor',...
+    [.5 .5 .5],'Position',[.115 .36 .12 .1],'String',...
+    'Quote For:<Company Symbol>','FontSize',10);
+qinfo=uicontrol('Style','text','Units','normalized','BackgroundColor',...
+    [1 1 1],'Position',[.05 .07 .25 .36],'FontSize',10);
+%Box for news
+tnews=uicontrol('Style','text','Units','normalized','BackgroundColor',...
+    [.5 .5 .5],'Position',[.62 .36 .14 .1],'String',...
+    'RSS FEED: <Company Symbol>','FontSize',10);
+newslist=uicontrol('Style','list','Units','normalized','BackgroundColor',...
+    [.8 .8 .8],'Position',[.35 .07 .63 .36],'FontSize',10,...
+    'Callback',@callbackfn3);
+ 
+set(f,'Visible','on');
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+%Variable initiation
+global months freq dim years ticker areaplot...
+    quote history RSSfeed numofmonths startmonth startday startyear
+ 
+months={'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',...
+    'Nov','Dec'};
+startmonth = '11';
+startday = '31';
+startyear = '2010';
+freq = 'd';
+dim = [31 28 31 30 31 30 31 31 30 31 30 31];
+years = [2011 2010 2009 2008];
+ticker = 'GOOG';
+areaplot = false;
+quotehandles = [];
+history = [];
+RSSfeed = [];
+ 
+ 
+%__________________________________________________________________
+%%
+ 
+function success = part7
+%Function updates the plot of the historical data.
+    
+clear history
+%Use the getStockHistory function to obtain historical data.
+history = getStockHistory(ticker,startmonth,startday,startyear,freq);
+%If the historical data is empty the the ticker provided is not valid.
+if isempty(history)
+    %Set output of the function to 0 and exit function.
+    success = false; 
+    return;
+%If the historical data is not empty, then the ticker was valid and 
+%you have data.    
+else
+    %Delete lines with handles in quote variable
+ 
+    %Delete lines with handles in quote variable
+    if ishandle(quotehandles)
+    delete(quotehandles)
+    end
+    %Set YLimMode and XLimMode of the axes to auto.
+    set(axs,'YLimMode','auto','XLimMode','auto')
+    %Check is there is an area plot present..
+     
+    if ishandle(areaplot)
+        %If there IS, set the YData to the closePrice vector from the
+        %historical structure. 
+        set(areaplot,'YData',[history.closePrice],'parent',axs)
+        success=true;
+    else %If there IS NOT a plot present one must be created.
+        %Create a vector using the closePrice field from the historical
+        %data. Use this vector to create an area plot. Set handle of
+        %plot to variable areaplot. 
+        
+        cprice = [history.closePrice];
+        areaplot = area(cprice,'parent',axs,'FaceColor',[0 0 1],'EdgeColor',[0 0 0],...
+            'LineWidth',3);
+        %Set alpha of area plot to .5
+        alpha(.5)
+        %Set YLabel of the plot to Price and normalize the font size.
+        ylabel('Price($)')
+        set(gca,'FontUnits','normalized','FontSize',.005)
+        
+        %Turn grid on
+        grid on
+        %Make output of the function logical true.
+        success = true;
+    end
+        %Set the X axis ticks
+        %Find where the month changes from one month to the next to
+        %the next using the diff function.
+        di = diff([history.month]);
+        %Find the indicies that correspond to the first of every month
+        %and add 1  to them
+        %Set this as the XTick of the area plot.
+       %xt=find(diff([history.month]))+1;
+        
+        numofindi = 0;
+        newindi = [];
+        
+        for i=1:length(di) 
+            if di(i) == 1 || di(i) == -11
+                v = i+1;
+                newindi = [newindi v];
+                numofindi = numofindi + 1;
+            end
+        end
+        newindi;
+        set(gca,'XTick',newindi,'FontSize',.05)
+        %Now set the x tick labels
+        %Find the total number of months by finding length of difference.
+        numofmonths = length(newindi);
+        %Find start month.
+        startl = history.month;
+        start = startl(1);
+        
+        %Months will range from start months to startmonth + # of months. 
+        mons = start:start+numofmonths;
+        x = find(mons>12);
+        %Following while loop converts months from following years into
+        %standard months. i.e. if you start at Januray and go to the 
+        %following April, then the following January will be month 13. 
+        %While loop will change that 13 to a 1.
+        while ~isempty(x)
+            mons(x) = mons(x)-12;
+            x = find(mons>12);
+        end
+        
+        %This deletes the first month label as without this, the XTickLabel
+        %was offset to the right by 1 month. This takes care of this
+        %problem and places the correct month where it belongs
+        
+        tempmons = mons(2:length(mons));
+        mons1 = tempmons;
+        mons1(length(mons1)+1) = mons(length(mons))+1;
+        mons = mons1;
+        
+        
+        %Will find inidices of all days in January.
+        n = find([history.month]==1);
+        %Make the variable equal to 9th of Janurary.
+        n = n(9);
+        %Newmonths is a cell array that indexed the original list array of 
+        %months to create an updated current list.
+        for i = 1:length(mons)
+            newmonths{i} = months{mons(i)};
+        end
+        %For loop takes all instances of JAN and changes it to 
+        %JAN '<corresponding year>. 
+      
+        %Create a variable to initialize and increase year
+        inityear = 0;
+        
+        for i = 1:length(newmonths)
+            if strcmpi(newmonths{i},'JAN')
+                k = history(i).year;
+                ke = k + inityear;
+                ke = num2str(ke);
+                ke = ke(3:4);
+                inityear = inityear + 1;
+                newmonths{i} = sprintf('Jan ''%s',ke);
+                %Add 365 to n to get to the next year if multiple years 
+                %are selected.
+                    if ~strcmp(k,'11') 
+                        n = n + 365;
+                    end
+            end
+        end
+        newmonths;
+        %Set this as the XTickLabel of the area plot
+        set(gca,'XTickLabel',newmonths,'FontSize',.05)
+        
+    end
+        
+end
+ 
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+function quote = part8
+%Function updates the quote information.
+    
+%Use getStockQuote function to get the financial quote of the company.
+quote = getStockQuote(ticker);
+ 
+%Change the title of the area plot to reflect the selected company. 
+areaplot;
+title(sprintf('%s:%s',ticker,quote.name))
+
+%Change the fontsize to accomdate for more data points, as there is much
+%overlapping when 2008 is called
+if str2num(startyear) == 2008
+set(gca,'FontUnits','normalized','FontSize',.032)
+else
+ set(gca,'FontUnits','normalized','FontSize',.04)   
+end
+
+
+
+%Set string above quote box to reflect company name also.
+set(csym,'String',sprintf('Quote for: %s',ticker))
+ 
+%Create the textbox that will contain the company's information.
+bigoltextbox = {'',...
+    ['Symbol: ',ticker],...
+    '',...
+    '-------------------------------------------',...
+    '',...
+    ['Change: ' num2str(quote.change)],...
+    ['Percent Change: ', num2str(quote.percentChange) '%'],...
+    ['Previous Close: ' num2str(quote.previousClose)],...
+    ['Opening: ', num2str(quote.openValue)],...
+    ['Day Range: ' num2str(quote.dayLow) '  -  ' num2str(quote.dayHigh)],...
+    ['52 Week Range: ' num2str(quote.low52) '  -  ' num2str(quote.high52)],...
+    '',...
+    '-------------------------------------------',...
+    '',...
+    ['% Change From 50 Day Average ' num2str(quote.percentChange50) '%'],...
+    ['% Change From 200 Day Average ' num2str(quote.percentChange200) '%'],...
+    ''};
+%Display the text in the text box.
+set(qinfo,'String',bigoltextbox)
+ 
+end
+ 
+%__________________________________________________________________
+%%
+ 
+function part9(quote)
+%Plot information on top of the area plot.
+    
+    
+%Get the current y limits of the area plot's parent.
+ylimits = get(axs,'YLim');
+%Use built in class function to check type of the moving50 field.
+mv = class(quote.moving50);
+%If the moving50 value is a double, plot it as a dotted blue line.
+if strcmp(mv,'double')
+    quotehandles(1)=plot([1 length(history)],[quote.moving50 quote.moving50],'--b');
+    %Use built in class function to check the type of the openValue.
+    hold on
+end
+ov = class(quote.openValue);
+if strcmp(ov,'double')
+    if strcmp(mv,'double')
+        %If type was double and greater than the moving50, plot green.
+        if quote.moving50 < quote.openValue
+            quotehandles(2) = plot([1 length(history)],[quote.openValue quote.openValue],'--g');
+            %If type was double and less than the moving50, plot red.
+        else
+            quotehandles(2) = plot([1 length(history)],[quote.openValue quote.openValue],'--r');
+        end
+        %If it wasnt a double at all, plot black.
+    else
+        quotehandles(2) = plot([1 length(history)],[quote.openValue quote.openValue],'--k');
+    end
+end
+ 
+%Reset the axis to reflect the possible change in axis through the new
+%plotting. Change x's from 1 to the number of months represented. Use y 
+%limits from earlier to change the y axis.
+ 
+axis(axs,[1 length(history) ylimits(1) ylimits(2)])
+ 
+end
+ 
+ 
+%__________________________________________________________________
+%%
+ 
+function part10
+%Updates the RSS feed
+    
+%Set the string in title box to reflect company name.
+tickerstring = ['RSS FEED: ' ticker];
+set(tnews,'String',tickerstring)
+ 
+%Get vector of structures using built in getRSSFeed function.
+RSSfeed = getRSSFeed(ticker);
+ 
+%Preallocate cell with same lenght as the vector of structs.
+cfeed = cell(1,length(RSSfeed)); 
+ 
+ 
+%For every structure, use formatRSS function to get the correctly colored
+%text and store it in the appropriate line. 
+for i = 1:length(RSSfeed)
+    ctext = formatRSS(RSSfeed(i).title,RSSfeed(i).site,RSSfeed(i).date);
+    cfeed{i} = ctext;
+end
+%Set the string value of the list to equal the cell array of news.
+set(newslist,'String',cfeed)
+ 
+end
+ 
+%__________________________________________________________________
+%%
+ 
+function part11(ticker)
+%Updates the recent searches box
+    
+%Get the cell array of strings in the list box that holds recent searches.
+searches = get(rser,'String');
+ 
+ 
+%If the ticker is already present in the cell array, remove it.
+for i = 1:length(searches)
+        if strcmp(searches{i},ticker) == 1
+        searches{i} = [];
+        fprintf('go\n')
+        end
+end
+ 
+init = 1;
+%Reallocate cell array so blanks do not exist
+for i = 1:length(searches)
+    if isempty(searches{i}) == 0
+        intemp = searches{i};
+        insearches{init} = intemp;
+        init = init + 1;
+    end
+end
+searches = insearches;
+        
+ 
+%Add the newly inputted ticker to the front of the list.
+slen = length(searches);
+newsearch = cell(1,slen+1);
+ 
+%Cycles through each element independently and adds it to a temporary
+%variable 1 spot beyond it's spot in the original string
+for i=1:slen
+    newsearch{i+1} = searches{i};
+end
+newsearch{1} = ticker;
+searches = newsearch;
+ 
+%If there are more than 10 searches present, remove anything past the 
+%10th search.
+if length(searches) > 10
+    searches = searches{1:10};
+end
+%Set the string value of the recent searches to the new cell array.
+set(rser,'String',searches)
+ 
+end
+ 
+%__________________________________________________________________
+%%
+ 
+function callbackfn1(source,eventdata)
+%Callback funtion for the editable textbox.
+ 
+%Get the string from editable text box and assign it to global
+%variable ticker.    
+ticker = get(symbox,'String');
+%Set the string to an empty string
+set(symbox,'String',[])
+set(rser,'value',1)
+ 
+%Use output from part 7 to see if ticker was valid.
+success9 = part7;
+%If ticker is valid...
+if success9 == 1
+    %Use part 11 to add ticker to recent searches box.
+    part11(ticker)
+    %update quote information with part 8
+    quote = part8;
+    %Plot the quote data with part 9
+    part9(quote)
+    %Update RSS Feed
+    part10
+else %if ticker is invalid, display a security window.
+    wd = warndlg('That security does not exist','Invalid Ticker','modal');
+end
+end
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+function callbackfn2(source,eventdata)
+%2nd callback function is for when the user clicks the Recent searches box.
+ 
+%Get value from list box
+reserval = get(rser,'value');
+%Get cell array of strings from recent rearches box as well.
+reserstrings = get(rser,'String');
+ 
+%Get company ticker using the past two values we just got.
+ticker = reserstrings{reserval};
+ 
+%Plot area plot with part 7.
+success = part7;
+ 
+%if ticker exists...
+if success == 1
+    %Update quote information
+    quote = part8;
+    %Plot quote data
+    part9(quote)
+    %Update RSS feed
+    part10
+end
+end
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+function callbackfn3(source,eventdata)
+%Function is for when user double clicks a value in the RSS Feed box.
+ 
+%Gets selection type from the window
+seltype = get(f,'SelectionType');
+ 
+%If selection type is 'open' then user double clicked something
+if strcmpi(seltype,'open')
+    %Get value from RSS list box.
+    newsval = get(newslist,'value');
+    %Use value to index into list of newsfeed and extract information about
+    %story.
+    story = RSSfeed(newsval);
+    %Use web function to display slected page in webpage. 
+    web(story.link,'-browser')
+end
+end
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+%'Start Date' static text box.
+sdate = uicontrol('Style','text','Units','normalized',...
+    'Position',[.07 .48 .08 .03],'BackgroundColor',[.5 .5 .5],...
+    'String','Start Date');
+%Pop up menu for the months
+monpup = uicontrol('Style','popup','Units','normalized',...
+    'Position',[.2 .48 .08 .02],'String',months,'Callback',@callbackfnmo);
+ 
+ 
+%Creates a cell array of # of days in a month, using 
+%the value from the months pop up menu as an input.
+mot = get(monpup,'Value');
+dainmo = dim(mot);
+for i = 1:dainmo
+    days{i} = num2str(i);
+end
+ 
+%Pop up menu for the days.
+daypup = uicontrol('Style','popup','Units','normalized',...
+    'Position',[.3 .48 .08 .02],'String',days);
+%Pop up menu for the years.
+yrpup = uicontrol('Style','popup','Units','normalized',...
+    'Position',[.4 .48 .08 .02],...
+    'String',mat2cell(years),'Callback',@callbackfnyr);
+%Update pushbutton.
+upd = uicontrol('Style','pushbutton','Units','normalized',...
+    'Position',[.5 .48 .08 .02],...
+    'String','Update','Callback',@callbackfnupdate);
+ 
+%__________________________________________________________________
+%%
+ 
+ 
+    function callbackfnmo(source,eventdata)
+        %Callback function for the month pup up menu.
+        
+        %Gets value from the pop up menu.
+        monval = get(monpup,'Value');
+        %Use monval to figure out how many days need to be displayed by 
+        %indexing into the global days in month variable.
+        days2disp = dim(monval);
+       
+        %If current value from day pop up is larger than # of days in 
+        %days2disp, set value of the day pop up to days2disp.
+        dayval = get(daypup,'Value');
+        if dayval > days2disp
+            set(daypup,'Value',days2disp)
+        end
+        %Create a cell array with numbers 1 to days in month. Make them 
+        %strings. Set the string of day pop up menu to this array.
+        daynum = 1;
+        for i = 1:days2disp
+            daysdisplayed{i} = num2str(daynum);
+            daynum = daynum+1;
+        end
+        
+        set(daypup,'String',daysdisplayed)
+    end
+%__________________________________________________________________
+%%
+ 
+    function callbackfnyr(sourve,eventdata)
+        %Callback function for the year popup menu
+        
+        %Get value from the pop up menu. Translate that into an actual
+        %year by indexing into year variable. 
+        yearval = get(yrpup,'Value');
+        year = years(yearval);
+        
+        %If there is a leap year, change the days in month element 
+        %for FEB to 29. If not, change it to 28.
+        if rem(year,4)==0 && rem(year,400)~=0
+            dim(2) = 29;
+        else 
+            dim(2) = 28;
+        end
+        
+        %Check to see if the value of the month popup is FEB.
+        isfeb=get(monpup,'Value');
+        %If the month is FEB and the value of the day popup is greater than
+        %28, set it to be 28.
+        if isfeb == 2
+            dayvalue = get(daypup,'Value');
+            if dayvalue > 28
+                set(daypup,'value',28)
+            end
+        end
+    end
+%__________________________________________________________________
+%%
+ 
+    function callbackfnupdate(source,eventdata)
+    %Callback function for the update button    
+        
+        %Check to see if the ticker value is empty. If 
+        %there is something in it, get the values for the new start month, 
+        %start day and start day and assign those to their respective
+        %global variables.
+        if ~isempty(ticker)           
+            smonth = get(monpup,'Value');
+            startday = num2str(get(daypup,'Value'));
+            startyear = get(yrpup,'Value');
+            
+            startyear = num2str(years(startyear));
+            startmonth = num2str(smonth-1);
+            %Use part7 to plot the area.
+            success2 = part7;
+            %Use part8 to update quote information.
+if success2 ==1
+    quotel = part8;
+    part9(quotel);
+    part10
+end
+        end
+    end
+ 
+%__________________________________________________________________
+%%
+ 
+%Populating the GUI at Startup
+ 
+%Set values for the month, day, and year in the pop up menus.
+set(monpup,'value',12)
+set(daypup,'value',31)
+set(yrpup,'value',2)
+ 
+%Use part7 function to plot area. If the ticker is valid, which it should
+%be, use part8 to update the quote information, part9 to plot the quote
+%data and part10 to update the RSS feed.  
+ 
+success1 = part7;
+if success1 ==1
+    quotel = part8;
+    part9(quotel);
+    part10
+end
+ 
+%Make the figure window visible.
+set(f,'Visible','on');
+ 
+uicontrol(symbox)
+ 
+end
